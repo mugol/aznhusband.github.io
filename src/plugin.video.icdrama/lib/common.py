@@ -9,7 +9,8 @@ from urllib import urlencode, quote
 from resolveurl.hmf import HostedMediaFile
 import resolveurl
 from resolveurl.lib.net import Net, get_ua
-#import requests
+import requests
+import base64
 
 _plugin_url = sys.argv[0]
 _handle = int(sys.argv[1])
@@ -116,3 +117,31 @@ def busy_indicator():
         yield
     finally:
         xbmc.executebuiltin('Dialog.Close(busydialog)')
+
+def mirrors_request(data_dict, b_url):
+    #defining stuff for the request
+    request_payload = {'VB_TOKEN': data_dict['token'], 'VB_ID': data_dict['id'], 'VB_NAME': 1, 'VB_U': 1}
+    request_headers = {
+        'Accept': "*/*",
+        'Accept-Encoding': "gzip, deflate",
+        'Accept-Language': "en-US,en;q=0.9",
+        'Connection': "keep-alive",
+        'Content-Length': str(sys.getsizeof(request_payload)),
+        'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
+        'Host': "vb.icdrama.to",
+        'Origin': b_url,
+        'User-Agent': get_ua()
+        }
+
+    #post request
+    post_response = requests.post(data_dict['post_url'], headers=request_headers, data=request_payload)
+
+    #raise exceptions to kodi/higher level? not sure how requests exceptions will be handled
+    post_response.raise_for_status()
+
+    # decode links after first 4 entries
+    mirror_list = post_response.json()[1][4:]
+    for mirror in mirror_list:
+        mirror['u'] = base64.b64decode(mirror['u']).encode('utf-8')
+
+    return mirror_list

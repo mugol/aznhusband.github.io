@@ -62,14 +62,38 @@ def episodes(url):
 
 @cache.memoize(10)
 def mirrors(url):
-    soup = _soup(url)
-    mirrs = [node.getText() for node in soup.select('span.tite')]
-    mirr_parts = [node.find_all('a', recursive=False)
-                  for node in soup.select('ul.tn-uldef')]
+    # find the player element and follow the embeded video link
+    embeded_link = urljoin(config.base_url, _soup(url).find(id='iframeplayer')['src'])
+    embeded_soup = _soup(embeded_link)
+    
+    # get requests data from script elements
+    script_list = embeded_soup.select('script')
+    post_regex = re.compile('(?<=var VB_POST_URL = ")(.+?(?="))')
+    token_regex = re.compile('(?<=var VB_TOKEN = ")(.+?(?="))')
+    id_regex = re.compile('(?<=var VB_ID = ")(.+?(?="))')
+    token_with_id = {}
+    for s_element in script_list:
+        s_text = str(s_element)
+        post_match = post_regex.search(s_text)
+        token_match = token_regex.search(s_text)
+        id_match = id_regex.search(s_text)
+        if post_match:
+            token_with_id['post_url'] = post_match.group(1)
+        if token_match:
+            token_with_id['token'] = token_match.group(1)
+        if id_match:
+            token_with_id['id'] = id_match.group(1)
+    
+    # make post request to get encoded video info
+    mirrors_with_links = common.mirrors_request(token_with_id, config.base_url)
+
+    #trying to match previous output
     mirr_list = []
-    for mirr, parts in zip(mirrs, mirr_parts):
-        parts = [(p.getText(), p['href']) for p in parts]
-        mirr_list.append((mirr, parts))
+    for mirror in mirrors_with_links:
+        mirr_label = mirror['s']
+        #there's only one part...?
+        parts = [("", mirror['u'])]
+        mirr_list.append((mirr_label, parts))
     return mirr_list
 
 @cache.memoize(60)
